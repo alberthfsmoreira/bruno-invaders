@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Bruno Invaders</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: #000;
+        }
+        #controls {
+            position: fixed;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+        }
+        #controls button {
+            width: 70px;
+            height: 70px;
+            font-size: 16px;
+            margin: 5px;
+            border-radius: 10px;
+        }
+        #controls button:active {
+            background-color: #ccc;
+        }
+        #score {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas do jogo -->
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+
+    <!-- Pontuação -->
+    <div id="score">Score: 0</div>
+
+    <!-- Botões de controle -->
+    <div id="controls">
+        <button id="leftBtn">⬅️</button>
+        <button id="rightBtn">➡️</button>
+        <button id="shootBtn">🔫</button>
+        <button id="specialBtn">💥</button>
+    </div>
+
+    <!-- Código JavaScript -->
+    <script>
+        var canvas = document.getElementById("gameCanvas");
+        var ctx = canvas.getContext("2d");
+
+        var player = {
+            x: canvas.width / 2 - 15,
+            y: canvas.height - 40,
+            width: 30,
+            height: 30,
+            speed: 5,
+            bullets: [],
+            specialActive: false,
+            showSpeechBubble: false
+        };
+
+        var enemies = [];
+        var enemyDirection = 1; // 1 para direita, -1 para esquerda
+        var enemySpeed = 1;
+        var enemyTimer = 0;
+
+        var score = 0;
+
+        var leftPressed = false;
+        var rightPressed = false;
+        var shootPressed = false;
+
+        var explosions = [];
+
+        function initEnemies() {
+            enemies = [];
+            for (var i = 0; i < 5; i++) {
+                for (var j = 0; j < 8; j++) {
+                    enemies.push({
+                        x: 30 + j * 50,
+                        y: 30 + i * 40,
+                        width: 30,
+                        height: 30,
+                        alive: true
+                    });
+                }
+            }
+        }
+
+        initEnemies();
+
+        // Loop do jogo
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Atualiza o estado do jogo
+        function update() {
+            // Move o jogador
+            if (leftPressed && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (rightPressed && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Dispara projétil
+            if (shootPressed) {
+                player.bullets.push({
+                    x: player.x + player.width / 2 - 2.5,
+                    y: player.y,
+                    width: 5,
+                    height: 10,
+                    speed: 7
+                });
+                shootPressed = false; // Dispara apenas uma vez por toque
+            }
+
+            // Atualiza projéteis
+            for (var i = 0; i < player.bullets.length; i++) {
+                var bullet = player.bullets[i];
+                bullet.y -= bullet.speed;
+                // Remove o projétil se sair da tela
+                if (bullet.y + bullet.height < 0) {
+                    player.bullets.splice(i, 1);
+                    i--;
+                } else {
+                    // Verifica colisão com inimigos
+                    for (var j = 0; j < enemies.length; j++) {
+                        var enemy = enemies[j];
+                        if (enemy.alive &&
+                            bullet.x < enemy.x + enemy.width &&
+                            bullet.x + bullet.width > enemy.x &&
+                            bullet.y < enemy.y + enemy.height &&
+                            bullet.y + bullet.height > enemy.y) {
+                            enemy.alive = false;
+                            score += 10;
+                            document.getElementById("score").innerText = "Score: " + score;
+
+                            // Adiciona explosão
+                            explosions.push({
+                                x: enemy.x,
+                                y: enemy.y,
+                                frame: 0
+                            });
+
+                            player.bullets.splice(i, 1);
+                            i--;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Move os inimigos
+            enemyTimer++;
+            if (enemyTimer % 30 === 0) {
+                var moveDown = false;
+                for (var i = 0; i < enemies.length; i++) {
+                    var enemy = enemies[i];
+                    if (enemy.alive) {
+                        enemy.x += enemyDirection * enemySpeed * 10;
+                        if (enemy.x + enemy.width > canvas.width || enemy.x < 0) {
+                            moveDown = true;
+                        }
+                    }
+                }
+                if (moveDown) {
+                    enemyDirection *= -1;
+                    for (var i = 0; i < enemies.length; i++) {
+                        var enemy = enemies[i];
+                        if (enemy.alive) {
+                            enemy.y += 10;
+                            // Verifica se os inimigos chegaram no jogador
+                            if (enemy.y + enemy.height >= player.y) {
+                                alert("Game Over! Sua pontuação: " + score);
+                                document.location.reload();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Se o especial estiver ativo
+            if (player.specialActive) {
+                // Destrói todos os inimigos
+                for (var i = 0; i < enemies.length; i++) {
+                    if (enemies[i].alive) {
+                        enemies[i].alive = false;
+                        score += 10;
+                        document.getElementById("score").innerText = "Score: " + score;
+
+                        // Adiciona explosão
+                        explosions.push({
+                            x: enemies[i].x,
+                            y: enemies[i].y,
+                            frame: 0
+                        });
+                    }
+                }
+                player.specialActive = false;
+                player.showSpeechBubble = true;
+                setTimeout(function() {
+                    player.showSpeechBubble = false;
+                }, 2000);
+            }
+
+            // Atualiza explosões
+            for (var i = 0; i < explosions.length; i++) {
+                explosions[i].frame++;
+                if (explosions[i].frame > 20) {
+                    explosions.splice(i, 1);
+                    i--;
+                }
+            }
+
+            // Verifica se todos os inimigos foram destruídos
+            var allEnemiesDestroyed = enemies.every(function(enemy) {
+                return !enemy.alive;
+            });
+            if (allEnemiesDestroyed) {
+                // Inicia nova fase com inimigos mais rápidos
+                enemySpeed += 0.5;
+                initEnemies();
+            }
+        }
+
+        // Desenha o jogo
+        function draw() {
+            // Limpa o canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenha o jogador
+            ctx.fillStyle = "green";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // Desenha o balão de fala se ativo
+            if (player.showSpeechBubble) {
+                ctx.fillStyle = "white";
+                ctx.font = "14px Arial";
+                var text = "Cara vocês são muito ex gamer";
+                var textWidth = ctx.measureText(text).width;
+                var speechWidth = textWidth + 20;
+                ctx.fillRect(player.x - 10, player.y - 70, speechWidth, 40);
+                ctx.fillStyle = "black";
+                ctx.fillText(text, player.x, player.y - 45);
+            }
+
+            // Desenha os projéteis
+            ctx.fillStyle = "yellow";
+            for (var i = 0; i < player.bullets.length; i++) {
+                var bullet = player.bullets[i];
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+
+            // Desenha os inimigos
+            ctx.fillStyle = "red";
+            for (var i = 0; i < enemies.length; i++) {
+                var enemy = enemies[i];
+                if (enemy.alive) {
+                    ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                }
+            }
+
+            // Desenha as explosões
+            for (var i = 0; i < explosions.length; i++) {
+                var explosion = explosions[i];
+                ctx.fillStyle = "orange";
+                ctx.beginPath();
+                ctx.arc(explosion.x + enemy.width / 2, explosion.y + enemy.height / 2, explosion.frame * 2, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+
+        // Event listeners para os botões
+        function setupButton(buttonId, onPress, onRelease) {
+            var button = document.getElementById(buttonId);
+            button.addEventListener("touchstart", function(e) {
+                onPress();
+                e.preventDefault();
+            });
+            button.addEventListener("touchend", function(e) {
+                onRelease();
+                e.preventDefault();
+            });
+            button.addEventListener("mousedown", function(e) {
+                onPress();
+                e.preventDefault();
+            });
+            button.addEventListener("mouseup", function(e) {
+                onRelease();
+                e.preventDefault();
+            });
+        }
+
+        setupButton("leftBtn", function() { leftPressed = true; }, function() { leftPressed = false; });
+        setupButton("rightBtn", function() { rightPressed = true; }, function() { rightPressed = false; });
+        setupButton("shootBtn", function() { shootPressed = true; }, function() {});
+        setupButton("specialBtn", function() { player.specialActive = true; }, function() {});
+
+        // Inicia o loop do jogo
+        gameLoop();
+    </script>
+</body>
+</html>
